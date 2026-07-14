@@ -2,6 +2,8 @@
 name = "bib-convert"
 version = "0.1.0"
 edition = "2024"
+description = "Convert .bib files into structured YAML, TOML, or JSON"
+readme = "README.md"
 
 [dependencies]
 biblatex = { version = "0.12", features = ["serde"] }
