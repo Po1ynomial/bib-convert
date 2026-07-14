@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use bib_convert::{
     bibliography_entries, parse_bibliography, project_bibliography, serialize_bibliography_debug,
-    serialize_entries_debug, serialize_records, ConvertError, OutputFormat,
+    serialize_entries_debug, serialize_records, ConvertError, OutputFormat, ProjectionMode,
 };
 use clap::{Parser, ValueEnum};
 
@@ -24,6 +24,9 @@ struct Cli {
 
     #[arg(long = "debug-entries")]
     debug_entries: Option<PathBuf>,
+
+    #[arg(long = "raw-fields")]
+    raw_fields: bool,
 }
 
 #[derive(Debug, Copy, Clone, ValueEnum)]
@@ -49,7 +52,12 @@ fn main() -> Result<(), ConvertError> {
     let format: OutputFormat = cli.format.into();
 
     let bibliography = parse_bibliography(&input)?;
-    let records = project_bibliography(&bibliography);
+    let projection_mode = if cli.raw_fields {
+        ProjectionMode::Raw
+    } else {
+        ProjectionMode::Smart
+    };
+    let records = project_bibliography(&bibliography, projection_mode);
     let output = serialize_records(&records, format)?;
 
     let output_path = match cli.output {

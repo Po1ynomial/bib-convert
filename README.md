@@ -8,7 +8,11 @@ The current goal is simple, readable export rather than strict schema modeling. 
 - `key`
 - `fields`
 
-where `fields` is a string-to-string map containing whatever fields were present in the bibliography entry.
+where `fields` contains whatever fields were present in the bibliography entry.
+
+By default, well-known person-list fields such as `author`, `editor`,
+`translator`, and `bookauthor` are projected into arrays of readable names.
+Use `--raw-fields` to keep the older raw string-style field output.
 
 ## Status
 
@@ -17,6 +21,8 @@ This project currently favors a loose, practical output shape:
 - no serious record-level validation yet
 - no opinionated per-entry schema enforcement
 - normalized field values come from `biblatex`
+- some well-known fields, especially person-list fields, may become
+  structured values
 - output is intended to be easy to inspect and reuse downstream
 
 ## Build
@@ -35,6 +41,7 @@ cargo run -- --help
 
 Current CLI:
 
+<!-- markdownlint-disable MD013 -->
 ```text
 Convert .bib files into structured YAML, TOML, or JSON
 
@@ -48,8 +55,10 @@ Options:
   -o <OUTPUT>
       --debug-biblatex <DEBUG_BIBLATEX>
       --debug-entries <DEBUG_ENTRIES>
+      --raw-fields
   -h, --help                             Print help
 ```
+<!-- markdownlint-enable MD013 -->
 
 ### Basic conversion
 
@@ -75,6 +84,15 @@ cargo run -- path/to/input.bib -f json
 ```bash
 cargo run -- path/to/input.bib -f json -o out/records.json
 ```
+
+### Keep raw field strings
+
+```bash
+cargo run -- path/to/input.bib --raw-fields
+```
+
+This disables special handling for well-known fields like `author` and
+keeps the raw normalized string representation for every field.
 
 ### Write debug artifacts
 
@@ -109,10 +127,13 @@ The default YAML output looks like:
 - type: article
   key: edge1
   fields:
-    author: Gompf, Robert E. and Stipsicz, András I.
+    author:
+      - Robert E. Gompf
+      - András I. Stipsicz
     month: August
     note: A & B
-    title: State sum invariants of $3$-manifolds and quantum $6j$-symbols
+    title: State sum invariants of $3$-manifolds and quantum
+      $6j$-symbols
     year: '2024'
 ```
 
@@ -124,13 +145,15 @@ Each exported record has this general shape:
 - type: <entry type>
   key: <citation key>
   fields:
-    <field-name>: <string value>
+    <field-name>: <string value | list of strings>
 ```
 
 Properties of the current projection:
 
-- all field values are exported as strings
 - unknown or uncommon BibTeX/BibLaTeX fields are allowed through unchanged
+- well-known person-list fields like `author` may be exported as lists
+  of readable names
+- use `--raw-fields` if you want every field rendered as a raw normalized string
 - math delimiters like `$...$` are preserved in projected values
 - some values are normalized by `biblatex`, for example:
   - month abbreviations may become full names
