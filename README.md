@@ -1,40 +1,50 @@
 # bib-convert
 
-Convert a `.bib` file into YAML, TOML, or JSON using Rust and `biblatex`.
+`bib-convert` converts BibTeX/BibLaTeX `.bib` files into readable YAML, TOML, or JSON using Rust and the [`biblatex`](https://crates.io/crates/biblatex) crate.
 
-The current goal is simple, readable export rather than strict schema modeling. Each record is emitted as:
+The project currently prioritizes practical, inspectable exports over a strict bibliography schema. Each bibliography entry is emitted as a record with:
 
-- `type`
-- `key`
-- `fields`
+- `type` — the BibTeX/BibLaTeX entry type, such as `article` or `book`
+- `key` — the citation key
+- `fields` — the fields present on the entry after projection/normalization
 
-where `fields` contains whatever fields were present in the bibliography entry.
+By default, common person-list fields such as `author`, `editor`, `translator`, and `bookauthor` are exported as arrays of readable names. Use `--raw-fields` if you want the older raw string-style field output instead.
 
-By default, well-known person-list fields such as `author`, `editor`,
-`translator`, and `bookauthor` are projected into arrays of readable names.
-Use `--raw-fields` to keep the older raw string-style field output.
+## Quick start
 
-## Status
-
-This project currently favors a loose, practical output shape:
-
-- no serious record-level validation yet
-- no opinionated per-entry schema enforcement
-- normalized field values come from `biblatex`
-- some well-known fields, especially person-list fields, may become
-  structured values
-- date-like fields may be normalized or synthesized in smart mode
-- output is intended to be easy to inspect and reuse downstream
-
-## Build
+Build the project:
 
 ```bash
 cargo build
 ```
 
-## Run
+Convert a bibliography file to YAML:
 
-Show CLI help:
+```bash
+cargo run -- path/to/refs.bib
+```
+
+Choose a different output format:
+
+```bash
+cargo run -- path/to/refs.bib -f json
+cargo run -- path/to/refs.bib -f toml
+```
+
+By default, the output path is derived from the input path:
+
+- `refs.bib` → `refs.yaml`
+- `refs.bib -f json` → `refs.json`
+
+To choose the output path explicitly:
+
+```bash
+cargo run -- path/to/refs.bib -f json -o out/records.json
+```
+
+## CLI
+
+Show the full help text:
 
 ```bash
 cargo run -- --help
@@ -42,7 +52,6 @@ cargo run -- --help
 
 Current CLI:
 
-<!-- markdownlint-disable MD013 -->
 ```text
 Convert .bib files into structured YAML, TOML, or JSON
 
@@ -59,58 +68,35 @@ Options:
       --raw-fields
   -h, --help                             Print help
 ```
-<!-- markdownlint-enable MD013 -->
 
-### Basic conversion
+## Output model
 
-```bash
-cargo run -- path/to/input.bib
+Each exported record has this general shape:
+
+```yaml
+- type: <entry type>
+  key: <citation key>
+  fields:
+    <field-name>: <string value | list of strings>
 ```
 
-By default, the output path replaces the input extension:
+The default projection is intentionally permissive:
 
-- `refs.bib` → `refs.yaml`
-- `refs.bib` with `-f json` → `refs.json`
+- unknown or uncommon BibTeX/BibLaTeX fields are passed through
+- well-known person-list fields may be exported as lists of readable names
+- date-like fields may be normalized from explicit `date` fields or synthesized from `year` / `month` / `day`
+- when a smart `date` field is present, the component date fields used to produce it are removed for consistency
+- math delimiters such as `$...$` are preserved in projected values
+- some values are normalized by `biblatex`; for example:
+  - month abbreviations may become full names
+  - TeX accents may become Unicode
+  - escaped `\&` may become `&`
 
-### Choose a format
+Use `--raw-fields` when you want every field rendered as a raw normalized string and do not want synthesized or normalized fields added.
 
-```bash
-cargo run -- path/to/input.bib -f yaml
-cargo run -- path/to/input.bib -f toml
-cargo run -- path/to/input.bib -f json
-```
+## Example
 
-### Choose an explicit output file
-
-```bash
-cargo run -- path/to/input.bib -f json -o out/records.json
-```
-
-### Keep raw field strings
-
-```bash
-cargo run -- path/to/input.bib --raw-fields
-```
-
-This disables special handling for well-known fields like `author` and
-prevents synthesized or normalized fields like `date` from being added.
-
-### Write debug artifacts
-
-```bash
-cargo run -- path/to/input.bib \
-  --debug-biblatex debug/biblatex.yaml \
-  --debug-entries debug/entries.yaml
-```
-
-Notes:
-
-- main converted output uses the selected format
-- debug outputs are currently written as YAML
-
-## Example output
-
-Given a BibTeX entry like:
+Given this BibTeX entry:
 
 ```bibtex
 @article{edge1,
@@ -137,35 +123,45 @@ The default YAML output looks like:
       $6j$-symbols
 ```
 
-## Output shape
+## Raw field mode
 
-Each exported record has this general shape:
+Run with `--raw-fields` to disable special handling for well-known fields:
 
-```yaml
-- type: <entry type>
-  key: <citation key>
-  fields:
-    <field-name>: <string value | list of strings>
+```bash
+cargo run -- path/to/refs.bib --raw-fields
 ```
 
-Properties of the current projection:
+In raw field mode:
 
-- unknown or uncommon BibTeX/BibLaTeX fields are allowed through unchanged
-- well-known person-list fields like `author` may be exported as lists
-  of readable names
-- date-like fields may be normalized from explicit `date` fields or
-  synthesized from `year` / `month` / `day`
-- when a smart `date` field is present, the component date fields used to
-  produce it are removed for consistency
-- use `--raw-fields` if you want every field rendered as a raw normalized
-  string and do not want synthesized or normalized fields
-- math delimiters like `$...$` are preserved in projected values
-- some values are normalized by `biblatex`, for example:
-  - month abbreviations may become full names
-  - TeX accents may become Unicode
-  - escaped `\&` may become `&`
+- person-list fields such as `author` are not projected into readable-name arrays
+- synthesized or normalized fields such as smart `date` values are not added
+- fields are rendered as raw normalized strings
 
-This is intentionally permissive for now.
+## Debug outputs
+
+You can write intermediate debug artifacts while converting:
+
+```bash
+cargo run -- path/to/refs.bib \
+  --debug-biblatex debug/biblatex.yaml \
+  --debug-entries debug/entries.yaml
+```
+
+Notes:
+
+- the main converted output uses the selected output format
+- debug outputs are currently written as YAML
+
+## Project status
+
+`bib-convert` currently favors a loose, practical output shape:
+
+- no serious record-level validation yet
+- no opinionated per-entry schema enforcement
+- normalized field values come from `biblatex`
+- some well-known fields, especially person-list fields, may become structured values
+- date-like fields may be normalized or synthesized in smart mode
+- output is intended to be easy to inspect and reuse downstream
 
 ## Project structure
 
@@ -181,7 +177,7 @@ This is intentionally permissive for now.
 
 ## Development
 
-Run tests:
+Run the test suite:
 
 ```bash
 cargo test
