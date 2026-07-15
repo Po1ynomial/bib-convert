@@ -23,6 +23,7 @@ This project currently favors a loose, practical output shape:
 - normalized field values come from `biblatex`
 - some well-known fields, especially person-list fields, may become
   structured values
+- date-like fields may be normalized or synthesized in smart mode
 - output is intended to be easy to inspect and reuse downstream
 
 ## Build
@@ -92,7 +93,7 @@ cargo run -- path/to/input.bib --raw-fields
 ```
 
 This disables special handling for well-known fields like `author` and
-keeps the raw normalized string representation for every field.
+prevents synthesized or normalized fields like `date` from being added.
 
 ### Write debug artifacts
 
@@ -130,11 +131,10 @@ The default YAML output looks like:
     author:
       - Robert E. Gompf
       - András I. Stipsicz
-    month: August
+    date: 2024-08
     note: A & B
     title: State sum invariants of $3$-manifolds and quantum
       $6j$-symbols
-    year: '2024'
 ```
 
 ## Output shape
@@ -153,7 +153,12 @@ Properties of the current projection:
 - unknown or uncommon BibTeX/BibLaTeX fields are allowed through unchanged
 - well-known person-list fields like `author` may be exported as lists
   of readable names
-- use `--raw-fields` if you want every field rendered as a raw normalized string
+- date-like fields may be normalized from explicit `date` fields or
+  synthesized from `year` / `month` / `day`
+- when a smart `date` field is present, the component date fields used to
+  produce it are removed for consistency
+- use `--raw-fields` if you want every field rendered as a raw normalized
+  string and do not want synthesized or normalized fields
 - math delimiters like `$...$` are preserved in projected values
 - some values are normalized by `biblatex`, for example:
   - month abbreviations may become full names

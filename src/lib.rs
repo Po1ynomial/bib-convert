@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::fmt::{self, Display, Formatter};
 use std::io;
 
-use biblatex::{Bibliography, ChunksExt, Entry, ParseError};
+use biblatex::{Bibliography, ChunksExt, Date, Entry, ParseError, PermissiveType, Type};
 use serde::Serialize;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -114,10 +114,8 @@ pub fn convert_str_with_mode(
 pub fn project_bibliography(bibliography: &Bibliography, mode: ProjectionMode) -> Vec<Record> {
     bibliography
         .iter()
-        .map(|entry| Record {
-            r#type: entry.entry_type.to_string(),
-            key: entry.key.clone(),
-            fields: entry
+        .map(|entry| {
+            let mut fields = entry
                 .fields
                 .iter()
                 .map(|(name, chunks)| {
@@ -130,7 +128,40 @@ pub fn project_bibliography(bibliography: &Bibliography, mode: ProjectionMode) -
                     };
                     (name.clone(), value)
                 })
-                .collect(),
+                .collect::<BTreeMap<_, _>>();
+
+            if mode == ProjectionMode::Smart {
+                normalize_date_field(
+                    &mut fields,
+                    "date",
+                    &["year", "month", "day"],
+                    entry.date().ok(),
+                );
+                normalize_date_field(
+                    &mut fields,
+                    "eventdate",
+                    &["eventyear", "eventmonth", "eventday"],
+                    entry.event_date().ok(),
+                );
+                normalize_date_field(
+                    &mut fields,
+                    "origdate",
+                    &["origyear", "origmonth", "origday"],
+                    entry.orig_date().ok(),
+                );
+                normalize_date_field(
+                    &mut fields,
+                    "urldate",
+                    &["urlyear", "urlmonth", "urlday"],
+                    entry.url_date().ok(),
+                );
+            }
+
+            Record {
+                r#type: entry.entry_type.to_string(),
+                key: entry.key.clone(),
+                fields,
+            }
         })
         .collect()
 }
@@ -153,7 +184,35 @@ fn project_known_field(entry: &Entry, name: &str) -> Option<FieldValue> {
         "introduction" => entry.introduction().ok().map(render_people),
         "shortauthor" => entry.short_author().ok().map(render_people),
         "shorteditor" => entry.short_editor().ok().map(render_people),
+        "date" => entry.date().ok().map(render_date),
+        "eventdate" => entry.event_date().ok().map(render_date),
+        "origdate" => entry.orig_date().ok().map(render_date),
+        "urldate" => entry.url_date().ok().map(render_date),
         _ => None,
+    }
+}
+
+fn normalize_date_field(
+    fields: &mut BTreeMap<String, FieldValue>,
+    name: &str,
+    components: &[&str],
+    value: Option<PermissiveType<Date>>,
+) {
+    if !fields.contains_key(name)
+        && !components
+            .iter()
+            .any(|component| fields.contains_key(*component))
+    {
+        return;
+    }
+
+    let Some(value) = value else {
+        return;
+    };
+
+    fields.insert(name.to_string(), render_date(value));
+    for component in components {
+        fields.remove(*component);
     }
 }
 
@@ -164,6 +223,10 @@ fn render_people(people: Vec<biblatex::Person>) -> FieldValue {
             .map(|person| person.to_string())
             .collect(),
     )
+}
+
+fn render_date(value: PermissiveType<Date>) -> FieldValue {
+    FieldValue::String(value.to_chunks().format_verbatim())
 }
 
 pub fn bibliography_entries(bibliography: &Bibliography) -> Vec<Entry> {
@@ -257,9 +320,11 @@ mod tests {
             FieldValue::String("State sum invariants of $3$-manifolds".to_string())
         );
         assert_eq!(
-            records[0].fields["month"],
-            FieldValue::String("August".to_string())
+            records[0].fields["date"],
+            FieldValue::String("2024-08".to_string())
         );
+        assert!(!records[0].fields.contains_key("month"));
+        assert!(!records[0].fields.contains_key("year"));
         assert_eq!(
             records[0].fields["note"],
             FieldValue::String("A & B".to_string())
@@ -303,8 +368,26 @@ mod tests {
     }
 
     #[test]
+    fn synthesizes_date_from_year_month_day_fields() {
+        let input = "@article{edge, year = {2024}, month = aug, day = {15}}";
+
+        let records = match convert_str(input) {
+            Ok(records) => records,
+            Err(error) => panic!("convert sample bibliography with split date fields: {error}"),
+        };
+
+        assert_eq!(
+            records[0].fields["date"],
+            FieldValue::String("2024-08-15".to_string())
+        );
+        assert!(!records[0].fields.contains_key("year"));
+        assert!(!records[0].fields.contains_key("month"));
+        assert!(!records[0].fields.contains_key("day"));
+    }
+
+    #[test]
     fn raw_projection_keeps_author_as_string() {
-        let input = "@article{edge, author = {Gompf, Robert E. and Stipsicz, Andr\\'as I.}}";
+        let input = "@article{edge, author = {Gompf, Robert E. and Stipsicz, Andr\\'as I.}, year = {2024}, month = aug}";
 
         let records = match convert_str_with_mode(input, ProjectionMode::Raw) {
             Ok(records) => records,
@@ -314,6 +397,15 @@ mod tests {
         assert_eq!(
             records[0].fields["author"],
             FieldValue::String("Gompf, Robert E. and Stipsicz, András I.".to_string())
+        );
+        assert!(!records[0].fields.contains_key("date"));
+        assert_eq!(
+            records[0].fields["month"],
+            FieldValue::String("August".to_string())
+        );
+        assert_eq!(
+            records[0].fields["year"],
+            FieldValue::String("2024".to_string())
         );
     }
 

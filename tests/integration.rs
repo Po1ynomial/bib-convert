@@ -43,9 +43,11 @@ fn converts_characteristic_entries() {
         ])
     );
     assert_eq!(
-        records[0].fields["month"],
-        FieldValue::String("August".to_string())
+        records[0].fields["date"],
+        FieldValue::String("2024-08".to_string())
     );
+    assert!(!records[0].fields.contains_key("month"));
+    assert!(!records[0].fields.contains_key("year"));
     assert_eq!(
         records[0].fields["note"],
         FieldValue::String("A & B".to_string())
@@ -77,6 +79,10 @@ fn converts_characteristic_entries() {
         FieldValue::Strings(vec!["Jane Q. Public".to_string()])
     );
     assert_eq!(
+        records[1].fields["date"],
+        FieldValue::String("2006".to_string())
+    );
+    assert_eq!(
         records[1].fields["title"],
         FieldValue::String(
             "Codimension two PL embeddings of spheres with nonstandard regular neighborhoods"
@@ -97,7 +103,8 @@ fn serializes_supported_formats() {
         Err(error) => panic!("serialize yaml: {error}"),
     };
     assert!(yaml.contains("- type: article"));
-    assert!(yaml.contains("month: August"));
+    assert!(yaml.contains("date: 2024-08"));
+    assert!(!yaml.contains("month: August"));
     assert!(yaml.contains("author:"));
     assert!(yaml.contains("- Robert E. Gompf"));
     assert!(yaml.contains("translator:"));
@@ -157,7 +164,8 @@ fn cli_writes_default_output_and_debug_files() {
         Err(error) => panic!("read output file: {error}"),
     };
     assert!(output.contains("\"type\": \"article\""));
-    assert!(output.contains("\"month\": \"August\""));
+    assert!(output.contains("\"date\": \"2024-08\""));
+    assert!(!output.contains("\"month\": \"August\""));
     assert!(output.contains("\"author\": ["));
     assert!(output.contains("\"Robert E. Gompf\""));
 
@@ -209,6 +217,9 @@ fn cli_raw_fields_keeps_author_as_string() {
         Err(error) => panic!("read raw output file: {error}"),
     };
     assert!(output.contains("\"author\": \"Gompf, Robert E. and Stipsicz, András I.\""));
+    assert!(output.contains("\"month\": \"August\""));
+    assert!(output.contains("\"year\": \"2024\""));
+    assert!(!output.contains("\"date\":"));
 
     if let Err(error) = fs::remove_dir_all(&temp_dir) {
         panic!("remove temp dir: {error}");
